@@ -15,10 +15,8 @@
  */
 package io.gravitee.am.management.handlers.management.api.resources.organizations.environments.domains;
 
-import io.gravitee.am.management.handlers.management.api.resources.AbstractResource;
-import io.gravitee.am.management.service.UserService;
+import io.gravitee.am.management.handlers.management.api.resources.AbstractUsersResource;
 import io.gravitee.am.model.Acl;
-import io.gravitee.am.model.Platform;
 import io.gravitee.am.model.ReferenceType;
 import io.gravitee.am.model.User;
 import io.gravitee.am.model.common.Page;
@@ -33,7 +31,6 @@ import io.gravitee.common.http.MediaType;
 import io.reactivex.Maybe;
 import io.reactivex.Observable;
 import io.reactivex.Single;
-import io.reactivex.SingleSource;
 import io.swagger.annotations.*;
 import org.springframework.beans.factory.annotation.Autowired;
 
@@ -48,24 +45,15 @@ import javax.ws.rs.core.Response;
 import java.net.URI;
 import java.util.Comparator;
 
-import static io.gravitee.am.management.service.permissions.Permissions.of;
-import static io.gravitee.am.management.service.permissions.Permissions.or;
-
 /**
  * @author Titouan COMPIEGNE (titouan.compiegne at graviteesource.com)
  * @author GraviteeSource Team
  */
 @Api(tags = {"user"})
-public class UsersResource extends AbstractResource {
-
-    private static final int MAX_USERS_SIZE_PER_PAGE = 30;
-    private static final String MAX_USERS_SIZE_PER_PAGE_STRING = "30";
+public class UsersResource extends AbstractUsersResource {
 
     @Context
     private ResourceContext resourceContext;
-
-    @Autowired
-    private UserService userService;
 
     @Autowired
     private DomainService domainService;
@@ -92,6 +80,7 @@ public class UsersResource extends AbstractResource {
             @PathParam("environmentId") String environmentId,
             @PathParam("domain") String domain,
             @QueryParam("q") String query,
+            @QueryParam("filter") String filter,
             @QueryParam("page") @DefaultValue("0") int page,
             @QueryParam("size") @DefaultValue(MAX_USERS_SIZE_PER_PAGE_STRING) int size,
             @Suspended final AsyncResponse response) {
@@ -101,13 +90,7 @@ public class UsersResource extends AbstractResource {
         checkAnyPermission(organizationId, environmentId, domain, Permission.DOMAIN_USER, Acl.LIST)
                 .andThen(domainService.findById(domain)
                         .switchIfEmpty(Maybe.error(new DomainNotFoundException(domain)))
-                        .flatMapSingle(irrelevant -> {
-                            if (query != null) {
-                                return userService.search(domain, query, page, Integer.min(size, MAX_USERS_SIZE_PER_PAGE));
-                            } else {
-                                return userService.findByDomain(domain, page, Integer.min(size, MAX_USERS_SIZE_PER_PAGE));
-                            }
-                        })
+                        .flatMapSingle(__ -> searchUsers(ReferenceType.DOMAIN, domain, query, filter, page, size))
                         .flatMap(pagedUsers ->
                                 hasAnyPermission(authenticatedUser, organizationId, environmentId, domain, Permission.DOMAIN_USER, Acl.READ)
                                         .flatMap(hasPermission -> Observable.fromIterable(pagedUsers.getData())

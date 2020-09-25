@@ -21,14 +21,16 @@ import com.mongodb.client.model.Aggregates;
 import com.mongodb.reactivestreams.client.MongoCollection;
 import io.gravitee.am.common.analytics.Field;
 import io.gravitee.am.common.utils.RandomString;
+import io.gravitee.am.model.ReferenceType;
 import io.gravitee.am.model.User;
 import io.gravitee.am.model.analytics.AnalyticsQuery;
 import io.gravitee.am.model.common.Page;
-import io.gravitee.am.model.ReferenceType;
 import io.gravitee.am.model.scim.Address;
 import io.gravitee.am.model.scim.Attribute;
 import io.gravitee.am.model.scim.Certificate;
 import io.gravitee.am.repository.management.api.UserRepository;
+import io.gravitee.am.repository.management.api.search.FilterCriteria;
+import io.gravitee.am.repository.mongodb.common.FilterCriteriaParser;
 import io.gravitee.am.repository.mongodb.management.internal.model.UserMongo;
 import io.gravitee.am.repository.mongodb.management.internal.model.scim.AddressMongo;
 import io.gravitee.am.repository.mongodb.management.internal.model.scim.AttributeMongo;
@@ -60,6 +62,9 @@ public class MongoUserRepository extends AbstractManagementMongoRepository imple
 
     private static final String FIELD_ID = "_id";
     private static final String FIELD_USERNAME = "username";
+    private static final String FIELD_DISPLAY_NAME = "displayName";
+    private static final String FIELD_FIRST_NAME = "firstName";
+    private static final String FIELD_LAST_NAME = "lastName";
     private static final String FIELD_SOURCE = "source";
     private static final String FIELD_EMAIL = "email";
     private static final String FIELD_EMAIL_CLAIM = "additionalInformation.email";
@@ -74,7 +79,11 @@ public class MongoUserRepository extends AbstractManagementMongoRepository imple
 
         super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1));
         super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_EMAIL, 1));
+        super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_EMAIL_CLAIM, 1));
         super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_USERNAME, 1));
+        super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_DISPLAY_NAME, 1));
+        super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_FIRST_NAME, 1));
+        super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_LAST_NAME, 1));
         super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_EXTERNAL_ID, 1));
         super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_USERNAME, 1).append(FIELD_SOURCE, 1));
         super.createIndex(usersCollection, new Document(FIELD_REFERENCE_TYPE, 1).append(FIELD_REFERENCE_ID, 1).append(FIELD_EXTERNAL_ID, 1).append(FIELD_SOURCE, 1));
@@ -99,13 +108,26 @@ public class MongoUserRepository extends AbstractManagementMongoRepository imple
 
     @Override
     public Single<Page<User>> search(ReferenceType referenceType, String referenceId, String query, int page, int size) {
-        // currently search on username field
-        Bson searchQuery = new BasicDBObject(FIELD_USERNAME, query);
+        Bson searchQuery = or(
+                new BasicDBObject(FIELD_USERNAME, query),
+                new BasicDBObject(FIELD_EMAIL, query),
+                new BasicDBObject(FIELD_EMAIL_CLAIM, query),
+                new BasicDBObject(FIELD_DISPLAY_NAME, query),
+                new BasicDBObject(FIELD_FIRST_NAME, query),
+                new BasicDBObject(FIELD_LAST_NAME, query));
+
         // if query contains wildcard, use the regex query
         if (query.contains("*")) {
             String compactQuery = query.replaceAll("\\*+", ".*");
             String regex = "^" + compactQuery;
-            searchQuery = new BasicDBObject(FIELD_USERNAME, Pattern.compile(regex, Pattern.CASE_INSENSITIVE));
+            Pattern pattern = Pattern.compile(regex, Pattern.CASE_INSENSITIVE);
+            searchQuery = or(
+                    new BasicDBObject(FIELD_USERNAME, pattern),
+                    new BasicDBObject(FIELD_EMAIL, pattern),
+                    new BasicDBObject(FIELD_EMAIL_CLAIM, pattern),
+                    new BasicDBObject(FIELD_DISPLAY_NAME, pattern),
+                    new BasicDBObject(FIELD_FIRST_NAME, pattern),
+                    new BasicDBObject(FIELD_LAST_NAME, pattern));
         }
 
         Bson mongoQuery = and(
@@ -119,9 +141,17 @@ public class MongoUserRepository extends AbstractManagementMongoRepository imple
     }
 
     @Override
-    public Single<Page<User>> search(String domain, String query, int page, int size) {
+    public Single<Page<User>> search(ReferenceType referenceType, String referenceId, FilterCriteria criteria, int page, int size) {
+        BasicDBObject searchQuery = BasicDBObject.parse(FilterCriteriaParser.parse(criteria));
 
-        return search(DOMAIN, domain, query, page, size);
+        Bson mongoQuery = and(
+                eq(FIELD_REFERENCE_TYPE, referenceType.name()),
+                eq(FIELD_REFERENCE_ID, referenceId),
+                searchQuery);
+
+        Single<Long> countOperation = Observable.fromPublisher(usersCollection.countDocuments(mongoQuery)).first(0l);
+        Single<Set<User>> usersOperation = Observable.fromPublisher(usersCollection.find(mongoQuery).skip(size * page).limit(size)).map(this::convert).collect(LinkedHashSet::new, Set::add);
+        return Single.zip(countOperation, usersOperation, (count, users) -> new Page<>(users, 0, count));
     }
 
     @Override
