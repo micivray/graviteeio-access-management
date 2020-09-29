@@ -24,6 +24,7 @@ import io.gravitee.am.model.Domain;
 import io.gravitee.common.http.HttpHeaders;
 import io.gravitee.common.http.HttpMethod;
 import io.gravitee.common.http.MediaType;
+import io.reactivex.Maybe;
 import io.vertx.core.AsyncResult;
 import io.vertx.core.Future;
 import io.vertx.core.Handler;
@@ -95,7 +96,8 @@ public class LoginSSOPOSTEndpoint implements Handler<RoutingContext> {
 
     private void parseSSOSignInURL(RoutingContext routingContext, String identityProvider, SocialAuthenticationProvider authenticationProvider, Handler<AsyncResult<Request>> resultHandler) {
         try {
-            Request request = authenticationProvider.signInUrl(buildRedirectUri(routingContext, identityProvider));
+            Maybe<Request> maybeRequest = authenticationProvider.asyncSignInUrl(buildRedirectUri(routingContext, identityProvider));
+            Request request = maybeRequest.blockingGet();
             if (HttpMethod.GET.equals(request.getMethod())) {
                 throw new InvalidRequestException("SSO Sign In URL HTTP Method must be POST");
             }
@@ -116,10 +118,14 @@ public class LoginSSOPOSTEndpoint implements Handler<RoutingContext> {
 
     private Map<String, String> getParams(String query) {
         Map<String, String> query_pairs = new LinkedHashMap<>();
-        String[] pairs = query.split("&");
-        for (String pair : pairs) {
-            int idx = pair.indexOf("=");
-            query_pairs.put(pair.substring(0, idx), pair.substring(idx + 1));
+        if (query != null) {
+            String[] pairs = query.split("&");
+            for (String pair : pairs) {
+                if (!pair.isEmpty()) {
+                    int idx = pair.indexOf("=");
+                    query_pairs.put(pair.substring(0, idx), pair.substring(idx + 1));
+                }
+            }
         }
         return query_pairs;
     }
