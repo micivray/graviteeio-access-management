@@ -34,7 +34,8 @@ export class ApplicationIdPComponent implements OnInit {
     'oauth2-generic-am-idp': 'OpenID Connect',
     'github-am-idp': 'GitHub',
     'azure-ad-am-idp': 'Azure AD',
-    'facebook-am-idp': 'Facebook'
+    'facebook-am-idp': 'Facebook',
+    'jdbc-am-idp': 'JDBC'
   };
   private identityProviderIcons: any = {
     'ldap-am-idp' : 'device_hub',
@@ -43,7 +44,8 @@ export class ApplicationIdPComponent implements OnInit {
     'oauth2-generic-am-idp': 'cloud_queue',
     'github-am-idp': 'cloud_queue',
     'azure-ad-am-idp': 'cloud_queue',
-    'facebook-am-idp': 'cloud_queue'
+    'facebook-am-idp': 'cloud_queue',
+    'jdbc-am-idp': 'storage'
   };
   loadIdentities = true;
   application: any;

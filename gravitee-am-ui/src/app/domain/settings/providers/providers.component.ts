@@ -36,7 +36,8 @@ export class DomainSettingsProvidersComponent implements OnInit {
     'oauth2-generic-am-idp': 'OpenID Connect',
     'github-am-idp': 'GitHub',
     'azure-ad-am-idp': 'Azure AD',
-    'facebook-am-idp': 'Facebook'
+    'facebook-am-idp': 'Facebook',
+    'jdbc-am-idp': 'JDBC'
   };
   private identityProviderIcons: any = {
     'ldap-am-idp' : 'device_hub',

@@ -31,7 +31,8 @@ export class ProviderCreationStep1Component implements OnInit {
     'github-am-idp': 'GitHub',
     'facebook-am-idp': 'Facebook',
     'http-am-idp': 'HTTP',
-    'saml2-generic-am-idp': 'SAML 2.0'
+    'saml2-generic-am-idp': 'SAML 2.0',
+    'jdbc-am-idp': 'JDBC'
   };
   @Input() provider;
   providers: any[];
